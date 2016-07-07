@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>three.js webgl - interactive cubes</title>
+    <title>Rubiks Cube</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
     <style>
@@ -25,14 +25,21 @@
 
     var cube;
 
-    var mouse = new THREE.Vector2(), INTERSECTED;
+    var mouse = new THREE.Vector3(), INTERSECTED;
+
+    var xaxis = new THREE.Vector3(1, 0, 0);
+    var yaxis = new THREE.Vector3(0, 1, 0);
+    var zaxis = new THREE.Vector3(0, 0, 1);
+
     var radius = 128, theta = 45, phi = 45;
 
     var rotateScene = false;
     var rotateCube = false;
-    var srcX, srcY;
-    var selX, selY, selZ;
+
+    var src = new THREE.Vector3();
+    var sel = new THREE.Vector3();
     var orig;
+    var rotLock = '-';
 
     init();
     animate();
@@ -78,6 +85,9 @@
                     object.position.y = y * size * 1.25;
                     object.position.z = z * size * 1.25;
                     scene.add(object);
+
+                    var egh = new THREE.EdgesHelper(object, 0xffffff);
+                    scene.add(egh);
 
                     //save reference
                     cube[x + 1][y + 1][z + 1] = object;
@@ -141,6 +151,7 @@
         event.preventDefault();
         rotateScene = false;
         rotateCube = false;
+        rotLock = '-';
         //if rotateCube is true ... snap back rotation
     }
 
@@ -148,27 +159,26 @@
         event.preventDefault();
         mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
         mouse.y = -( event.clientY / window.innerHeight ) * 2 + 1;
+        mouse.z = 0.0;
 
-        srcX = mouse.x;
-        scrY = mouse.y;
+        src = mouse.clone();
 
         rotateScene = (event.buttons & 4);
         rotateCube = (event.buttons & 1);
 
-        if(rotateCube){
+        if (rotateCube) {
             var intersects = raycaster.intersectObjects(scene.children);
 
             if (intersects.length > 0) {
 
-                orig = new THREE.Vector3(mouse.x,mouse.y,0.0).unproject(camera); //--> real coordinates
+                orig = new THREE.Vector3(mouse.x, mouse.y, 0.0).unproject(camera); //--> real coordinates
                 console.log(orig);
 
-                for(var x = -1; x <= 1; ++x){
-                    for(var y = -1; y <= 1; ++y){
-                        for(var z = -1; z <= 1; ++z){
-                            if(cube[x+1][y+1][z+1] == intersects[0].object){
-                                selX = x; selY = y; selZ = z;
-                                console.log(selX,selY,selZ);
+                for (var x = -1; x <= 1; ++x) {
+                    for (var y = -1; y <= 1; ++y) {
+                        for (var z = -1; z <= 1; ++z) {
+                            if (cube[x + 1][y + 1][z + 1] == intersects[0].object) {
+                                sel.set(x, y, z);
                             }
                         }
                     }
@@ -202,19 +212,50 @@
             camera.lookAt(scene.position);
             camera.updateMatrixWorld();
         }
-        if(rotateCube){
-            var xdst = (orig.clone().add(new THREE.Vector3(1,0,0))).project(camera);
-            var ydst = (orig.clone().add(new THREE.Vector3(0,1,0))).project(camera);
-            var zdst = (orig.clone().add(new THREE.Vector3(0,0,1))).project(camera);
-            console.log(xdst,ydst,zdst);
-            dv = new THREE.Vector3(dx,dy,0);
-            var xProb = xdst.dot(dv);
-            var yProb = ydst.dot(dv);
-            var zProb = zdst.dot(dv);
-            var sum = Math.abs(xProb+yProb+zProb);
-            console.log(xProb/sum,yProb/sum,zProb/sum);
+        if (rotateCube) {
 
-            //if dx,dy > threshold ...
+            if (rotLock == '-') {
+                //none
+
+                var xdst = (orig.clone().add(xaxis)).project(camera).sub(mouse);
+                var ydst = (orig.clone().add(yaxis)).project(camera).sub(mouse);
+                var zdst = (orig.clone().add(zaxis)).project(camera).sub(mouse);
+
+                console.log(xdst, ydst, zdst);
+
+                var dv = new THREE.Vector3(newX, newY, 0.0).sub(src);
+
+                if (dv.length() > 0.05) { //arbitrary threshold to determine direction
+                    var xProb = Math.abs(xdst.dot(dv));
+                    var yProb = Math.abs(ydst.dot(dv));
+                    var zProb = Math.abs(zdst.dot(dv));
+                    var maxProb = Math.min(xProb, yProb, zProb); //min since orthogonal axis...
+                    console.log(xProb, yProb, zProb);
+                    if (xProb == maxProb) {
+                        rotLock = 'x';
+                    } else if (yProb == maxProb) {
+                        rotLock = 'y';
+                    } else {
+                        rotLock = 'z';
+                    }
+                }
+
+            } else {
+                switch (rotLock) {
+                    case 'x':
+                        cube[sel.x + 1][sel.y + 1][sel.z + 1].rotateX(0.5);
+                        break;
+                    case 'y':
+
+                        cube[sel.x + 1][sel.y + 1][sel.z + 1].rotateY(0.5);
+                        break;
+                    case 'z':
+
+                        cube[sel.x + 1][sel.y + 1][sel.z + 1].rotateZ(0.5);
+                        break;
+                }
+                console.log(rotLock);
+            }
 
         }
 
