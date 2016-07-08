@@ -152,7 +152,8 @@
         rotateScene = false;
         rotateCube = false;
         rotLock = '-';
-        //if rotateCube is true ... snap back rotation
+        //if rotateCube is true ... snap rotation & reinitialize indices
+        //
     }
 
     function onMouseDown(event) {
@@ -167,6 +168,7 @@
         rotateCube = (event.buttons & 1);
 
         if (rotateCube) {
+            //find the selected sub-cube
             var intersects = raycaster.intersectObjects(scene.children);
 
             if (intersects.length > 0) {
@@ -183,10 +185,16 @@
                         }
                     }
                 }
-                //intersects[0].object.rotateX(1.0);
             }
         }
     }
+
+    function rotateAroundWorldAxis(object, axis, radians) {
+        var rotWorldMatrix = new THREE.Matrix4();
+        rotWorldMatrix.makeRotationAxis(axis.normalize(), radians);
+        object.applyMatrix(rotWorldMatrix);
+    }
+
     function onMouseMove(event) {
         // currently implementing rotating the cube faces
 
@@ -214,47 +222,50 @@
         }
         if (rotateCube) {
 
-            if (rotLock == '-') {
-                //none
+            var xdst = (orig.clone().add(xaxis)).project(camera).sub(mouse);
+            var ydst = (orig.clone().add(yaxis)).project(camera).sub(mouse);
+            var zdst = (orig.clone().add(zaxis)).project(camera).sub(mouse);
+            console.log(xdst, ydst, zdst);
+            var dv = new THREE.Vector3(newX, newY, 0.0).sub(src);
 
-                var xdst = (orig.clone().add(xaxis)).project(camera).sub(mouse);
-                var ydst = (orig.clone().add(yaxis)).project(camera).sub(mouse);
-                var zdst = (orig.clone().add(zaxis)).project(camera).sub(mouse);
-
-                console.log(xdst, ydst, zdst);
-
-                var dv = new THREE.Vector3(newX, newY, 0.0).sub(src);
-
-                if (dv.length() > 0.05) { //arbitrary threshold to determine direction
-                    var xProb = Math.abs(xdst.dot(dv));
-                    var yProb = Math.abs(ydst.dot(dv));
-                    var zProb = Math.abs(zdst.dot(dv));
-                    var maxProb = Math.min(xProb, yProb, zProb); //min since orthogonal axis...
-                    console.log(xProb, yProb, zProb);
-                    if (xProb == maxProb) {
-                        rotLock = 'x';
-                    } else if (yProb == maxProb) {
-                        rotLock = 'y';
-                    } else {
-                        rotLock = 'z';
+            switch(rotLock){
+                case '-':
+                    if (dv.length() > 0.05) { //arbitrary threshold to determine direction
+                        var xProb = Math.abs(xdst.dot(dv));
+                        var yProb = Math.abs(ydst.dot(dv));
+                        var zProb = Math.abs(zdst.dot(dv));
+                        var maxProb = Math.min(xProb, yProb, zProb); //min since orthogonal axis...
+                        console.log(xProb, yProb, zProb);
+                        if (xProb == maxProb) {
+                            rotLock = 'x';
+                        } else if (yProb == maxProb) {
+                            rotLock = 'y';
+                        } else {
+                            rotLock = 'z';
+                        }
                     }
-                }
-
-            } else {
-                switch (rotLock) {
-                    case 'x':
-                        cube[sel.x + 1][sel.y + 1][sel.z + 1].rotateX(0.5);
-                        break;
-                    case 'y':
-
-                        cube[sel.x + 1][sel.y + 1][sel.z + 1].rotateY(0.5);
-                        break;
-                    case 'z':
-
-                        cube[sel.x + 1][sel.y + 1][sel.z + 1].rotateZ(0.5);
-                        break;
-                }
-                console.log(rotLock);
+                    break;
+                case 'x':
+                    for (var y = -1; y <= 1; ++y) {
+                        for (var z = -1; z <= 1; ++z) {
+                            rotateAroundWorldAxis(cube[sel.x + 1][y + 1][z + 1], xaxis, 0.1);
+                        }
+                    }
+                    break;
+                case 'y':
+                    for (var x = -1; x <= 1; ++x) {
+                        for (var z = -1; z <= 1; ++z) {
+                            rotateAroundWorldAxis(cube[x + 1][sel.y + 1][z + 1], yaxis, 0.1);
+                        }
+                    }
+                    break;
+                case 'z':
+                    for (var x = -1; x <= 1; ++x) {
+                        for (var y = -1; y <= 1; ++y) {
+                            rotateAroundWorldAxis(cube[x + 1][y + 1][sel.z + 1], zaxis, 0.1);
+                        }
+                    }
+                    break;
             }
 
         }
