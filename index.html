@@ -11,458 +11,437 @@
             margin: 0px;
             overflow: hidden;
         }
+
+        #controller{
+            position: absolute;
+            top: 0;
+            right: 0;
+            background-color: black;
+            opacity: 0.5;
+            color: white;
+            z-index: 1
+        }
+
     </style>
-</head>
-<body>
-<script src="https://code.jquery.com/jquery-2.2.4.js" integrity="sha256-iT6Q9iMJYuQiMWNd9lDyBUStIq/8PuOW33aOqmvFpqI="
-        crossorigin="anonymous"></script>
-<script src="three.min.js"></script>
+    <script src="https://code.jquery.com/jquery-2.2.4.js" integrity="sha256-iT6Q9iMJYuQiMWNd9lDyBUStIq/8PuOW33aOqmvFpqI="
+            crossorigin="anonymous"></script>
+    <script src="three.min.js"></script>
+    <script src="utils.js"></script>
+    <script src="axis.js"></script>
+    <script src="cube.js"></script>
 
-<script>
+    <script>
 
-    var container, stats;
-    var camera, scene, raycaster, renderer;
-    var outScene;
-    var rubiksCube;
+        //global vars for scene
+        var camera, scene, raycaster, renderer;
 
-    var mouse = new THREE.Vector3(), INTERSECTED;
+        //Rubiks Cube
+        var rubiksCube;
 
-    var xaxis = new THREE.Vector3(1, 0, 0);
-    var yaxis = new THREE.Vector3(0, 1, 0);
-    var zaxis = new THREE.Vector3(0, 0, 1);
+        var mouse = new THREE.Vector3(), INTERSECTED;
 
-    var radius = 128, theta = 45, phi = 45;
+        var origin = new THREE.Vector3(0, 0, 0);
 
-    var rotateScene = false;
-    var rotateCube = false;
+        var world_axes = {
+            x : new THREE.Vector3(1, 0, 0),
+            y : new THREE.Vector3(0, 1, 0),
+            z : new THREE.Vector3(0, 0, 1),
+        };
 
-    var src = new THREE.Vector3();
-    var sel = new THREE.Vector3();
-    var orig;
 
-    function similar(a,b,threshold) {
-        if(threshold == undefined || threshold == null){
-            threshold = 0.01;
+        //for camera controls
+        var radius = 128, theta = d2r(22.5), phi = d2r(22.5);
+
+        //interactions
+
+        var rotateScene = false;
+        var rotateCube = false;
+
+        var src = new THREE.Vector3();
+        var sel = new THREE.Vector3();
+
+        var orig;
+
+        //highlight selected cube
+        var highlight;
+
+        //temporarily show axes when clicking
+        var temp_axes;
+
+        var controller = {
+            scene : null,
+            camera : null,
+            renderer : null,
+            raycaster : new THREE.Raycaster(),
+            mouse : new THREE.Vector3()
+        };
+
+        $(document).ready(function () {
+            init();
+            animate();
+        });
+
+        function addLight(scene) {
+            var light = new THREE.DirectionalLight(0xffffff, 0.3);
+            light.position.set(1, 1, 1).normalize();
+            scene.add(light);
+            scene.add(new THREE.AmbientLight(0xeeeeee, 0.001));
         }
-        return Math.abs(a - b) < threshold;
-    }
 
-    function mod_pos(a,b){
-        return ((a%b)+b)%b;
-    }
-    function contain(x,a,b){
-
-        if(a>b){
-            [a,b] = [b,a]; //swap
+        function addCube(scene) {
+            var size = 20;
+            rubiksCube = new RubiksCube(size);
+            scene.add(rubiksCube.cube);
         }
 
-        if(x < a){
-            return a;
-        }else if (b < x){
-            return b;
+        function addAxes(scene) {
+            var axes = buildAxes(origin, 100);
+            scene.add(axes);
+        }
+        function addCamera(scene) {
+
         }
 
-        return x;
-    }
-    $(document).ready(function () {
-        init();
-        animate();
-    });
+        function setCamera(){
 
-    function cubeMaterial(x, y, z) {
-        var colors = [0xff0000, 0x00ff00, 0x0000ff, 0x00ffff, 0xff00ff, 0xffff00];
-        var materials = new Array(6);
-
-        /* COLORING */
-        for (var i = 0; i < 6; ++i) {
-            var color;
-            //R-L-U-D-F-B
-            if ((i == 0 && x == 1) ||
-                    (i == 1 && x == -1) ||
-                    (i == 2 && y == 1) ||
-                    (i == 3 && y == -1) ||
-                    (i == 4 && z == 1) ||
-                    (i == 5 && z == -1)
-            )
-                color = colors[i];
-            else
-                color = 0x000000;
-
-            materials[i] = new THREE.MeshPhongMaterial({
-                color: color,
-                shading: THREE.FlatShading,
-                overdraw: true
+            console.log({
+                theta : theta,
+                phi : phi
             });
-        }
 
-        return new THREE.MeshFaceMaterial(materials);
-    }
-
-    /* RubiksCube */
-    function RubiksCube(size) {
-        this.size = size;
-        this.cube = new THREE.Group();
-        this.cubes = new Array(3);
-
-        this.active = [];
-
-        this.pivotAxis = '-'; //indicates no lock
-        this.pivotDir = 0; //indicates no lock
-        this.returning = false;
-
-        for (var x = -1; x <= 1; ++x) {
-            this.cubes[x + 1] = new Array(3);
-            for (var y = -1; y <= 1; ++y) {
-                this.cubes[x + 1][y + 1] = new Array(3);
-                for (var z = -1; z <= 1; ++z) {
-
-                    var material = cubeMaterial(x, y, z);
-                    var geometry = new THREE.BoxGeometry(size, size, size);
-
-                    var cube_one = new THREE.Mesh(geometry, material);
-                    cube_one.position.x = x * size * 1.25;
-                    cube_one.position.y = y * size * 1.25;
-                    cube_one.position.z = z * size * 1.25;
-
-                    cube_one.edgesHelper = new THREE.EdgesHelper(cube_one, 0xffffff);
-                    cube_one.edgesHelper.material.linewidth = 2;
-
-                    scene.add(cube_one);
-                    scene.add(cube_one.edgesHelper);
-
-                    this.cubes[x + 1][y + 1][z + 1] = cube_one;
-                    //save reference
-                }
-            }
-        }
-    }
-    RubiksCube.prototype.lock = function (sel, axis,dir) {
-        this.pivotAxis = axis;
-        this.pivotDir = dir;
-
-        var x = (axis == 'x')?sel.x:0;
-        var y = (axis == 'y')?sel.y:0;
-        var z = (axis == 'z')?sel.z:0;
-
-        var cube;
-
-        this.pivot = this.cubes[x+1][y+1][z+1];
-
-        console.log(this.pivot.position[axis]);
-
-        for(x=-1;x<=1;++x){
-            for(y=-1;y<=1;++y){
-                for(z=-1;z<=1;++z){
-                    cube = this.cubes[x+1][y+1][z+1];
-
-                    if(similar(cube.position[axis], this.pivot.position[axis], 0.3)){
-                        this.active.push(cube);
-                        if(cube != this.pivot){
-                            THREE.SceneUtils.attach(cube, scene, this.pivot);
-                        }
-                    }
-                }
-            }
-        }
-//
-//
-//        switch (axis) {
-//            case 'x':
-//                this.pivot = this.cubes[sel.x+1][0+1][0+1];
-//                for (y = -1; y <= 1; ++y) {
-//                    for (z = -1; z <= 1; ++z) {
-//                        cube = this.cubes[sel.x + 1][y + 1][z + 1];
-//                        this.active.push(cube);
-//                        if(cube != this.pivot){
-//                            THREE.SceneUtils.attach(cube, this.cube, this.pivot);
-//                        }
-//                    }
-//                }
-//                break;
-//            case 'y':
-//                this.pivot = this.cubes[0+1][sel.y+1][0+1];
-//                for (x = -1; x <= 1; ++x) {
-//                    for (z = -1; z <= 1; ++z) {
-//                        cube = this.cubes[x + 1][sel.y + 1][z + 1];
-//                        this.active.push(cube);
-//                        if(cube != this.pivot){
-//                            THREE.SceneUtils.attach(cube, this.cube, this.pivot);
-//                        }
-//                    }
-//                }
-//                break;
-//            case 'z':
-//                this.pivot = this.cubes[0+1][0+1][sel.z+1];
-//                for (x = -1; x <= 1; ++x) {
-//                    for (y = -1; y <= 1; ++y) {
-//                        cube = this.cubes[x + 1][y + 1][sel.z + 1];
-//                        this.active.push(cube);
-//                        if(cube != this.pivot){
-//                            THREE.SceneUtils.attach(cube, this.cube, this.pivot);
-//                        }
-//                    }
-//                }
-//                break;
-//        }
-    };
-
-
-
-    RubiksCube.prototype.release = function(){
-
-        console.log(this.active.length);
-
-        for (i in this.active){
-            //this.active[i].updateMatrixWorld();
-            if(this.active[i] != this.pivot){
-                THREE.SceneUtils.detach(this.active[i],this.pivot,scene);
-            }
-        }
-
-        this.pivotAxis = '-';
-        this.pivotDir = 0;
-        this.active = [];
-        this.returning = false;
-
-        this.reIndex();
-    };
-
-    RubiksCube.prototype.snap = function () {
-        var angle = mod_pos(this.pivot.rotation[this.pivotAxis], Math.PI*2);
-
-        this.pivotDir = contain(this.target - angle, -0.5, 0.5);
-        this.rotateOnPivot();
-        angle = mod_pos(this.pivot.rotation[this.pivotAxis], Math.PI*2);
-
-        if(similar(angle,this.target, 0.01)){
-            this.returning = false;
-            console.log(this.returning);
-            this.release();
-        }
-    };
-
-    RubiksCube.prototype.startReturn = function(){
-        var angle = mod_pos(this.pivot.rotation[this.pivotAxis], Math.PI*2);
-        var quad = Math.round(angle / (Math.PI/2));
-        this.target = ((Math.PI/2) * quad);
-        this.returning = !similar(angle,this.target);
-        //this.return();
-    };
-
-    RubiksCube.prototype.rotateOnPivot = function () {
-        this.pivot.rotation[this.pivotAxis] += (this.pivotDir * 0.1);
-    };
-
-    RubiksCube.prototype.reIndex = function () {
-        // finish rotation
-
-    };
-
-    function addLight(scene) {
-        var light = new THREE.DirectionalLight(0xffffff, 0.3);
-        light.position.set(1, 1, 1).normalize();
-        scene.add(light);
-        scene.add(new THREE.AmbientLight(0xffffff, 0.001));
-    }
-
-    function addCube(scene) {
-        var size = 20;
-        rubiksCube = new RubiksCube(size);
-        scene.add(rubiksCube.cube);
-    }
-
-    function addCamera(scene) {
-
-    }
-
-    function init() {
-
-        container = document.createElement('div');
-        document.body.appendChild(container);
-
-        scene = new THREE.Scene();
-        outScene = new THREE.Scene();
-
-        addLight(scene);
-        addCube(scene);
-
-        raycaster = new THREE.Raycaster();
-
-        renderer = new THREE.WebGLRenderer();
-        renderer.setClearColor(0xf0f0f0);
-        renderer.setPixelRatio(window.devicePixelRatio);
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.sortObjects = false;
-        container.appendChild(renderer.domElement);
-
-        document.addEventListener('mousemove', onMouseMove, false);
-        document.addEventListener('mousedown', onMouseDown, false);
-        document.addEventListener('mouseup', onMouseUp, false);
-
-        window.addEventListener('resize', onWindowResize, false);
-
-
-        camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 1, 10000);
-
-        //initialize camera
-        camera.position.x = radius * Math.sin(theta * Math.PI / 360)
-                * Math.cos(phi * Math.PI / 360);
-        camera.position.y = radius * Math.sin(phi * Math.PI / 360);
-        camera.position.z = radius * Math.cos(theta * Math.PI / 360)
-                * Math.cos(phi * Math.PI / 360);
-        camera.updateMatrix();
-        camera.lookAt(scene.position);
-
-    }
-
-    function onWindowResize() {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-    }
-
-    function onMouseUp(event) {
-        event.preventDefault();
-        rotateScene = false;
-
-        // finish rotating cube
-        if (rotateCube) {
-            rubiksCube.startReturn();
-        }
-
-        rotateCube = false;
-
-    }
-
-    function onMouseDown(event) {
-        event.preventDefault();
-        mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
-        mouse.y = -( event.clientY / window.innerHeight ) * 2 + 1;
-        mouse.z = 0.0;
-
-        src = mouse.clone();
-
-        rotateScene = (event.buttons & 4); //middle button
-
-        rotateCube = (event.buttons & 1); //left button
-
-        if (rotateCube) {
-            //find the selected sub-cube
-            console.log(rubiksCube.cube.children.length);
-            var intersects = raycaster.intersectObjects(scene.children);
-
-
-            if (intersects.length > 0) {
-                console.log(intersects[0].face);
-                orig = new THREE.Vector3(mouse.x, mouse.y, 0.0).unproject(camera); //--> real coordinates
-                console.log(orig);
-
-                for (var x = -1; x <= 1; ++x) {
-                    for (var y = -1; y <= 1; ++y) {
-                        for (var z = -1; z <= 1; ++z) {
-                            if (rubiksCube.cubes[x + 1][y + 1][z + 1] == intersects[0].object) {
-                                sel.set(x, y, z);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    function rotateAroundWorldAxis(object, axis, radians) {
-        var rotWorldMatrix = new THREE.Matrix4();
-        rotWorldMatrix.makeRotationAxis(axis.normalize(), radians);
-        object.applyMatrix(rotWorldMatrix);
-    }
-
-    function onMouseMove(event) {
-        // currently implementing rotating the cube faces
-
-        event.preventDefault();
-        var newX = ( event.clientX / window.innerWidth ) * 2 - 1;
-        var newY = -( event.clientY / window.innerHeight ) * 2 + 1;
-
-        var dx = newX - mouse.x;
-        var dy = newY - mouse.y;
-
-        if (rotateScene) {
-
-            theta -= ( dx * 100);
-            phi -= ( dy * 100);
-
-            //phi = Math.min( 180, Math.max( 0, phi ) );
-            camera.position.x = radius * Math.sin(theta * Math.PI / 360)
-                    * Math.cos(phi * Math.PI / 360);
-            camera.position.y = radius * Math.sin(phi * Math.PI / 360);
-            camera.position.z = radius * Math.cos(theta * Math.PI / 360)
-                    * Math.cos(phi * Math.PI / 360);
+            camera.position.x = radius * Math.sin(theta)
+                    * Math.cos(phi);
+            camera.position.y = radius * Math.sin(phi);
+            camera.position.z = radius * Math.cos(theta)
+                    * Math.cos(phi);
             camera.updateMatrix();
             camera.lookAt(scene.position);
             camera.updateMatrixWorld();
+
+            // Same for controller camera
+            controller.camera.position.x = radius * Math.sin(theta)
+                    * Math.cos(phi);
+            controller.camera.position.y = radius * Math.sin(phi);
+            controller.camera.position.z = radius * Math.cos(theta)
+                    * Math.cos(phi);
+            controller.camera.updateMatrix();
+            controller.camera.lookAt(scene.position);
+            controller.camera.updateMatrixWorld();
         }
-        console.log(rotateCube);
 
-        if (rotateCube) {
+        function init() {
 
-            var xdst = (orig.clone().add(xaxis)).project(camera).sub(mouse);
-            var ydst = (orig.clone().add(yaxis)).project(camera).sub(mouse);
-            var zdst = (orig.clone().add(zaxis)).project(camera).sub(mouse);
-            //console.log(xdst, ydst, zdst);
-            var dv = new THREE.Vector3(newX, newY, 0.0).sub(src);
+            container = $("#container");
 
-            switch (rubiksCube.pivotAxis) {
-                case '-':
-                    if (dv.length() > 0.05) { //arbitrary threshold to determine direction
-                        var xProb = xdst.dot(dv);
-                        var yProb = ydst.dot(dv);
-                        var zProb = zdst.dot(dv);
-                        var maxProb = Math.min(Math.abs(xProb), Math.abs(yProb), Math.abs(zProb)); //min since orthogonal axis...
-                        console.log(xProb, yProb, zProb);
+            scene = new THREE.Scene();
 
-                        var axis;
-                        var dir;
+            addLight(scene);
+            addCube(scene);
+            addAxes(scene);
 
-                        if (Math.abs(xProb) == maxProb) {
-                            axis = 'x';
-                            dir = xProb >= 0? 1: -1;
-                        } else if (yProb == maxProb) {
-                            axis = 'y';
-                            dir = yProb >= 0? 1: -1;
-                        } else {
-                            axis = 'z';
-                            dir = zProb >= 0? 1: -1;
-                        }
+            raycaster = new THREE.Raycaster();
 
-                        rubiksCube.lock(sel, axis, dir);
-                    }
-                    break;
-                default:
-                    rubiksCube.rotateOnPivot();
-                    break;
+            renderer = new THREE.WebGLRenderer();
+            renderer.setClearColor(0xf0f0f0);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.sortObjects = false;
+
+            container.append(renderer.domElement);
+
+            container.mousemove(onMouseMove);
+            container.mousedown(onMouseDown);
+            container.mouseup(onMouseUp);
+
+            window.addEventListener('resize', onWindowResize, false);
+
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 1, 10000);
+
+            /* Controller */
+
+            controller.container = $("#controller_container");
+
+            controller.scene = new THREE.Scene();
+
+            //add light
+            controller.scene.add(new THREE.AmbientLight(0xe0e0e0, 0.1));
+
+            var materials = [];
+            var images = ['right','left','up','down','front','back'];
+
+            for(var i in images){
+                var image = images[i];
+                materials.push(
+                        new THREE.MeshBasicMaterial({
+                            map : THREE.ImageUtils.loadTexture('images/view_cube/' + image + '.png')
+                        }));
             }
 
+            //add cube
+            var cube = new THREE.Mesh(
+                    new THREE.BoxGeometry(20,20,20),
+                    new THREE.MeshFaceMaterial( materials)
+                    //new THREE.MeshBasicMaterial( {color: 0x000000} )
+            );
+
+            controller.scene.add(cube);
+
+            var egh = new THREE.EdgesHelper(cube, 0xffffff );
+            egh.material.linewidth = 2;
+            controller.scene.add(egh);
+
+            // add axes
+            addAxes(controller.scene);
+
+            controller.renderer = new THREE.WebGLRenderer();
+            controller.renderer.setClearColor(0xe0e0e0);
+            controller.renderer.setPixelRatio(window.devicePixelRatio);
+            controller.renderer.setSize(256,256);
+
+            controller.container.append(controller.renderer.domElement);
+
+            // initialize camera
+            controller.camera = new THREE.OrthographicCamera(-32,32,32,-32,0.1,256);
+
+
+            controller.container.mousedown(function(event){
+                //console.log(event);
+
+                controller.mouse.x = ( event.offsetX / 256) * 2 - 1;
+                controller.mouse.y = -( event.offsetY / 256) * 2 + 1;
+                controller.mouse.z = 0.0;
+
+                controller.raycaster.setFromCamera(controller.mouse, controller.camera);
+                var intersects = controller.raycaster.intersectObjects(controller.scene.children);
+
+                if(intersects.length > 0){
+
+                    var n = intersects[0].face.normal;
+
+                    console.log(n);
+
+                    theta = Math.atan2(n.x, n.z); // should be 3.14,0 at facing x axis
+
+                    phi = Math.asin(n.y);
+
+                    setCamera();
+                }
+
+            });
+
+            setCamera();
+
         }
 
-        mouse.x = newX;
-        mouse.y = newY;
-    }
-
-    function animate() {
-        requestAnimationFrame(animate);
-        render();
-    }
-
-    function render() {
-        //console.log(rubiksCube.returning);
-        if(rubiksCube.returning){
-            rubiksCube.snap();
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();scene.add(new THREE.AmbientLight(0xeeeeee, 0.001));
+            renderer.setSize(window.innerWidth, window.innerHeight);
         }
-        raycaster.setFromCamera(mouse, camera);
-        renderer.render(scene, camera);
-    }
 
-</script>
+        function onMouseUp(event) {
+            event.preventDefault();
+            rotateScene = false;
+
+            // finish rotating cube
+
+            if (rotateCube) {
+                rubiksCube.startReturn();
+            }
+
+            if(highlight){
+                scene.remove(highlight);
+                highlight = null;
+            }
+
+            if(temp_axes){
+                scene.remove(temp_axes);
+                temp_axes = null;
+            }
+
+            rotateCube = false;
+
+        }
+
+        function onMouseDown(event) {
+            event.preventDefault();
+            mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
+            mouse.y = -( event.clientY / window.innerHeight ) * 2 + 1;
+            mouse.z = 0.0;
+
+            src = mouse.clone();
+
+            rotateScene = (event.buttons & 4); //middle button
+
+            if(!rotateCube && (event.buttons & 1)){ //not already rotating && rotation initiated
+                rotateCube = true;
+                if (rotateCube) {
+                    //find the selected sub-cube
+                    var intersects = raycaster.intersectObjects(scene.children);
+                    console.log(scene.children.length);
+
+                    if (intersects.length > 0) {
+
+                        orig = intersects[0].point;
+
+                        //add temporary axes
+                        temp_axes = buildAxes(orig, 10);
+                        scene.add(temp_axes);
+
+                        console.log(intersects[0].point);
+
+                        console.log(intersects[0].face);
+                        //orig = new THREE.Vector3(mouse.x, mouse.y, 0.0).unproject(camera); //--> real coordinates
+                        console.log(orig);
+
+                        /*
+                         var geometry = new THREE.SphereGeometry( 1, 32, 32 );
+                         var material = new THREE.MeshBasicMaterial( {color: 0xffff00} );
+                         var sphere = new THREE.Mesh( geometry, material );
+
+                         sphere.position.x = ori22g.x;
+                         sphere.position.y = orig.y;
+                         sphere.position.z = orig.z;
+
+                         scene.add( sphere );
+                         */
+
+                        var cube = intersects[0].object;
+
+                        sel = rubiksCube.get_index(cube);
+
+                        //console.log("SEL");
+                        //console.log(sel);
+
+                        highlight = new THREE.EdgesHelper(cube, 0xffa500);
+                        highlight.material.linewidth = 4;
+                        scene.add(highlight);
+
+                    }
+                }
+            }
+        }
+
+        function world2screen(point){
+            var p = point.clone();
+            var canvas = renderer.domElement;
+            p.project( camera );
+            //p.x = Math.round( (   p.x + 1 ) * canvas.width  / 2 );
+            //p.y = Math.round( ( - p.y + 1 ) * canvas.height / 2 );
+            p.z = 0;
+            return p;
+        }
+
+        function onMouseMove(event) {
+            // currently implementing rotating the cube faces
+
+            event.preventDefault();
+            var newX = ( event.clientX / window.innerWidth ) * 2 - 1;
+            var newY = -( event.clientY / window.innerHeight ) * 2 + 1;
+
+            var dx = newX - mouse.x;
+            var dy = newY - mouse.y;
+
+            if (rotateScene) {
+
+                theta -= dx;
+
+                phi -= dy;
+
+                setCamera();
+            }
+            //console.log(rotateCube);
+
+            if (rotateCube) {
+
+                var xdst = world2screen(orig.clone().add(world_axes.x)).sub(world2screen(orig)); //-1 ~ 1 screen coordinates
+                var ydst = world2screen(orig.clone().add(world_axes.y)).sub(world2screen(orig));
+                var zdst = world2screen(orig.clone().add(world_axes.z)).sub(world2screen(orig));
+
+                //console.log("ORIG", world2screen(orig));
+                //console.log("DSTS");
+                //console.log(xdst, ydst, zdst);
+
+                var dv = new THREE.Vector3(newX, newY, 0.0).sub(src); // in terms of screen
+
+                switch (rubiksCube.pivotAxis) {
+                    case '-':
+                        if (dv.length() > 0.1) { //arbitrary threshold to determine direction
+
+                            //console.log("DV", dv);
+
+                            var probs = {
+                                x : xdst.dot(dv),
+                                y : ydst.dot(dv),
+                                z : zdst.dot(dv)
+                            };
+
+                            //console.log("PROBS", probs);
+
+                            var axes = 'xyz';
+                            var res = argmax(Math.abs(probs.x),Math.abs(probs.y),Math.abs(probs.z));
+
+                            var axis = axes[res.idx];
+                            var prob = res.val;
+                            var dir = probs[axis] >= 0 ? 1 : -1;
+
+                            console.log('AXIS : ', axis);
+                            rubiksCube.lock(sel, axis, dir);
+                        }
+                        break;
+                    default:
+                        rubiksCube.rotateOnPivot();
+                        break;
+                }
+
+            }
+
+            mouse.x = newX;
+            mouse.y = newY;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            render();
+        }
+
+        function render() {
+            switch (rubiksCube.state) {
+                case 'returning':
+                    rubiksCube.snap();
+                    break;
+                case 'releasing':
+                    rubiksCube.release();
+                    break;
+                default:
+                    break;
+            }
+            raycaster.setFromCamera(mouse, camera);
+            renderer.render(scene, camera);
+
+            /* controller's cube */
+            controller.renderer.render(controller.scene, controller.camera);
+
+        }
+
+    </script>
+
+</head>
+
+<body>
+
+<div id="container">
+
+</div>
+
+<div id="controller">
+    Controller
+    <div id="controller_container">
+
+    </div>
+    Click on face to change view.
+</div>
 
 </body>
+
 </html>
