@@ -12,12 +12,12 @@
             overflow: hidden;
         }
 
-        #controller {
+        #ui {
             position: absolute;
             top: 0;
             right: 0;
             background-color: black;
-            opacity: 0.5;
+            opacity: 0.8;
             color: white;
             z-index: 1
         }
@@ -70,7 +70,7 @@
         //temporarily show axes when clicking
         var temp_axes;
 
-        var controller = {
+        var ui = {
             scene: null,
             camera: null,
             renderer: null,
@@ -113,15 +113,15 @@
             camera.lookAt(scene.position);
             camera.updateMatrixWorld();
 
-            // Same for controller camera
-            controller.camera.position.x = radius * Math.sin(theta)
+            // Same for ui camera
+            ui.camera.position.x = 64 * Math.sin(theta)
                     * Math.cos(phi);
-            controller.camera.position.y = radius * Math.sin(phi);
-            controller.camera.position.z = radius * Math.cos(theta)
+            ui.camera.position.y = 64 * Math.sin(phi);
+            ui.camera.position.z = 64 * Math.cos(theta)
                     * Math.cos(phi);
-            controller.camera.updateMatrix();
-            controller.camera.lookAt(scene.position);
-            controller.camera.updateMatrixWorld();
+            ui.camera.updateMatrix();
+            ui.camera.lookAt(scene.position);
+            ui.camera.updateMatrixWorld();
         }
 
         function init() {
@@ -147,20 +147,16 @@
 
             container.append(renderer.domElement);
 
-            container.mousemove(onMouseMove);
-            container.mousedown(onMouseDown);
-            container.mouseup(onMouseUp);
-
             camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 1, 10000);
 
-            /* Controller */
+            /* ui */
 
-            controller.container = $("#controller_container");
+            ui.container = $("#ui_container");
 
-            controller.scene = new THREE.Scene();
+            ui.scene = new THREE.Scene();
 
             //add light
-            controller.scene.add(new THREE.AmbientLight(0xe0e0e0, 0.1));
+            ui.scene.add(new THREE.AmbientLight(0xe0e0e0, 0.1));
 
             var materials = [];
             var images = ['right', 'left', 'up', 'down', 'front', 'back'];
@@ -181,48 +177,48 @@
                     //new THREE.MeshBasicMaterial( {color: 0x000000} )
             );
 
-            controller.scene.add(cube);
+            ui.scene.add(cube);
 
             var egh = new THREE.EdgesHelper(cube, 0xffffff);
             egh.material.linewidth = 2;
-            controller.scene.add(egh);
+            ui.scene.add(egh);
 
-            controller.scene.add(buildAxes(origin, 100));
+            ui.scene.add(buildAxes(origin, 100));
 
-            controller.renderer = new THREE.WebGLRenderer();
-            controller.renderer.setClearColor(0xe0e0e0);
-            controller.renderer.setPixelRatio(window.devicePixelRatio);
-            controller.renderer.setSize(256, 256);
+            ui.renderer = new THREE.WebGLRenderer();
+            ui.renderer.setClearColor(0xe0e0e0);
+            ui.renderer.setPixelRatio(window.devicePixelRatio);
+            ui.renderer.setSize(256, 256);
 
-            controller.container.append(controller.renderer.domElement);
+            ui.container.append(ui.renderer.domElement);
 
             // initialize camera
-            controller.camera = new THREE.OrthographicCamera(-32, 32, 32, -32, 0.1, 256);
+            ui.camera = new THREE.OrthographicCamera(-24, 24, 24, -24, 0.1, 1024);
 
 
-            controller.container.mousedown(function (event) {
+            ui.container.mousedown(function (event) {
                 //console.log(event);
+                if(event.buttons & 1){
+                    ui.mouse.x = ( event.offsetX / 256) * 2 - 1;
+                    ui.mouse.y = -( event.offsetY / 256) * 2 + 1;
+                    ui.mouse.z = 0.0;
 
-                controller.mouse.x = ( event.offsetX / 256) * 2 - 1;
-                controller.mouse.y = -( event.offsetY / 256) * 2 + 1;
-                controller.mouse.z = 0.0;
+                    ui.raycaster.setFromCamera(ui.mouse, ui.camera);
+                    var intersects = ui.raycaster.intersectObjects(ui.scene.children);
 
-                controller.raycaster.setFromCamera(controller.mouse, controller.camera);
-                var intersects = controller.raycaster.intersectObjects(controller.scene.children);
+                    if (intersects.length > 0) {
 
-                if (intersects.length > 0) {
+                        var n = intersects[0].face.normal;
 
-                    var n = intersects[0].face.normal;
+                        //console.log(n);
 
-                    //console.log(n);
+                        theta = Math.atan2(n.x, n.z); // should be 3.14,0 at facing x axis
 
-                    theta = Math.atan2(n.x, n.z); // should be 3.14,0 at facing x axis
+                        phi = Math.asin(n.y);
 
-                    phi = Math.asin(n.y);
-
-                    setCamera();
+                        setCamera();
+                    }
                 }
-
             });
 
 
@@ -268,7 +264,13 @@
 
             window.addEventListener('resize', onWindowResize, false);
 
-            window.addEventListener('mousewheel', function (e) {
+            //mouse controls
+
+            $(document).mousemove(onMouseMove);
+            container.mousedown(onMouseDown);
+            $(document).mouseup(onMouseUp);
+
+            container.get(0).addEventListener('mousewheel', function (e) {
                 radius *= ((e.wheelDelta * wheelDirection > 0) ? 1.05 : 0.95);
                 setCamera();
             });
@@ -308,7 +310,7 @@
         }
 
         function onMouseDown(event) {
-            event.preventDefault();
+            //event.preventDefault();
             mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
             mouse.y = -( event.clientY / window.innerHeight ) * 2 + 1;
             mouse.z = 0.0;
@@ -331,26 +333,9 @@
                     temp_axes = buildAxes(orig, 10);
                     scene.add(temp_axes);
 
-                    //console.log(orig);
-
-                    /*
-                     var geometry = new THREE.SphereGeometry( 1, 32, 32 );
-                     var material = new THREE.MeshBasicMaterial( {color: 0xffff00} );
-                     var sphere = new THREE.Mesh( geometry, material );
-
-                     sphere.position.x = ori22g.x;
-                     sphere.position.y = orig.y;
-                     sphere.position.z = orig.z;
-
-                     scene.add( sphere );
-                     */
-
                     var cube = intersects[0].object;
 
                     sel = rubiksCube.get_index(cube);
-
-                    //console.log("SEL");
-                    //console.log(sel);
 
                     highlight = new THREE.EdgesHelper(cube, 0xffa500);
                     highlight.material.linewidth = 4;
@@ -365,8 +350,6 @@
             var p = point.clone();
             var canvas = renderer.domElement;
             p.project(camera);
-            //p.x = Math.round( (   p.x + 1 ) * canvas.width  / 2 );
-            //p.y = Math.round( ( - p.y + 1 ) * canvas.height / 2 );
             p.z = 0;
             return p;
         }
@@ -405,17 +388,13 @@
 
                 switch (rubiksCube.pivotAxis) {
                     case '-':
-                        if (dv.length() > 0.1) { //arbitrary threshold to determine direction
-
-                            //console.log("DV", dv);
+                        if (dv.length() > 0.05) { //arbitrary threshold to determine direction
 
                             var probs = {
                                 x: xdst.dot(dv),
                                 y: ydst.dot(dv),
                                 z: zdst.dot(dv)
                             };
-
-                            //console.log("PROBS", probs);
 
                             var axes = 'xyz';
                             var res = argmax(Math.abs(probs.x), Math.abs(probs.y), Math.abs(probs.z));
@@ -459,8 +438,8 @@
             raycaster.setFromCamera(mouse, camera);
             renderer.render(scene, camera);
 
-            /* controller's cube */
-            controller.renderer.render(controller.scene, controller.camera);
+            /* ui's cube */
+            ui.renderer.render(ui.scene, ui.camera);
 
         }
 
@@ -474,10 +453,10 @@
 
 </div>
 
-<div id="controller">
-    <span>Controller</span>
+<div id="ui">
+    <span>Interface</span>
 
-    <div id="controller_container"></div>
+    <div id="ui_container"></div>
     <span>Click on face to set view angle.</span><br/>
 
     <button type="button" id="shuffle" style="margin-top:10px">Shuffle</button>
