@@ -3,10 +3,11 @@
  */
 
 function cubeMaterial(x, y, z) {
-    var colors = [0xff0000, 0x00ff00, 0x0000ff, 0x00ffff, 0xff00ff, 0xffff00];
+
     var materials = new Array(6);
 
     var images = ['right','left','up','down','front','back'];
+
     var loader = new THREE.TextureLoader();
 
     for(var i in images){
@@ -23,6 +24,8 @@ function cubeMaterial(x, y, z) {
 
 
     /* COLORING */
+    //var colors = [0xff0000, 0x00ff00, 0x0000ff, 0x00ffff, 0xff00ff, 0xffff00];
+
     /*for (var i = 0; i < 6; ++i) {
         var color;
         //R-L-U-D-F-B
@@ -52,22 +55,23 @@ function cubeMaterial(x, y, z) {
 
 /* RubiksCube */
 function RubiksCube(size) {
-    this.size = size;
-    THREE.Object3D.call(this);
-    //this.cube = new THREE.Group();
-    this.cubes = new Array(3);
 
+    this.size = size;
+
+    THREE.Object3D.call(this); //inheritance
+
+    this.cubes = ndarray([3,3,3]);
 
     this.active = []; //active group for movement
+
     this.pivotAxis = '-'; //indicates no lock
+
     this.pivotDir = 0; //indicates no lock
 
     this.state = 'free';
 
     for (var x = -1; x <= 1; ++x) {
-        this.cubes[x + 1] = new Array(3);
         for (var y = -1; y <= 1; ++y) {
-            this.cubes[x + 1][y + 1] = new Array(3);
             for (var z = -1; z <= 1; ++z) {
 
                 var material = cubeMaterial(x, y, z);
@@ -79,9 +83,10 @@ function RubiksCube(size) {
                 cube_one.position.z = z * size; // * 1.25;
 
                 cube_one.edgesHelper = new THREE.EdgesHelper(cube_one, 0x000000);
+
                 cube_one.edgesHelper.material.linewidth = 2;
 
-                cube_one.name = 'cube(' + x + ',' + y + ',' + z + ')';
+                cube_one.name = 'cube(' + x + ',' + y + ',' + z + ')'; //useful for debugging
 
                 this.add(cube_one);
                 this.add(cube_one.edgesHelper);
@@ -139,68 +144,25 @@ RubiksCube.prototype.lock = function (sel, axis, dir) {
     }
 
     scene.add(this.pivot);
-
-//
-//
-//        switch (axis) {
-//            case 'x':
-//                this.pivot = this.cubes[sel.x+1][0+1][0+1];
-//                for (y = -1; y <= 1; ++y) {
-//                    for (z = -1; z <= 1; ++z) {
-//                        cube = this.cubes[sel.x + 1][y + 1][z + 1];
-//                        this.active.push(cube);
-//                        if(cube != this.pivot){
-//                            THREE.SceneUtils.attach(cube, this.cube, this.pivot);
-//                        }
-//                    }
-//                }
-//                break;
-//            case 'y':
-//                this.pivot = this.cubes[0+1][sel.y+1][0+1];
-//                for (x = -1; x <= 1; ++x) {
-//                    for (z = -1; z <= 1; ++z) {
-//                        cube = this.cubes[x + 1][sel.y + 1][z + 1];
-//                        this.active.push(cube);
-//                        if(cube != this.pivot){
-//                            THREE.SceneUtils.attach(cube, this.cube, this.pivot);
-//                        }
-//                    }
-//                }
-//                break;
-//            case 'z':
-//                this.pivot = this.cubes[0+1][0+1][sel.z+1];
-//                for (x = -1; x <= 1; ++x) {
-//                    for (y = -1; y <= 1; ++y) {
-//                        cube = this.cubes[x + 1][y + 1][sel.z + 1];
-//                        this.active.push(cube);
-//                        if(cube != this.pivot){
-//                            THREE.SceneUtils.attach(cube, this.cube, this.pivot);
-//                        }
-//                    }
-//                }
-//                break;
-//        }
 };
 
 
 RubiksCube.prototype.release = function () {
     var pivot = this.pivot;
 
+    pivot.matrixWorldNeedsUpdate = true;
+    pivot.updateMatrix();
+    pivot.updateMatrixWorld();
+
+    this.updateMatrixWorld();
+
     if (pivot) {
 
         for (i in this.active) {
             var cube = this.active[i];
-            //cube.updateMatrixWorld();
-            this.updateMatrixWorld();
+            //cube.applyMatrix(pivot.matrixWorld);
             THREE.SceneUtils.detach(cube, pivot, this); //back onto the cube!
         }
-
-        //traverse did not work -- threw undefined
-        //pivot.traverse(function(object){
-        //    console.log('OBJECT', object);
-        //    console.log('PIVOT', object);
-        //
-        //});
 
         this.pivotAxis = '-';
         this.pivotDir = 0;
@@ -236,7 +198,6 @@ RubiksCube.prototype.startReturn = function () {
         this.target = quantize(angle, Math.PI/2);
         this.state = 'returning';
     }
-
 };
 
 function rotateAroundWorldAxis(object, axis, radians) {
@@ -284,7 +245,6 @@ RubiksCube.prototype.reIndex = function () {
 RubiksCube.prototype.get_index = function (cube) {
     var pos = new THREE.Vector3();
     //console.log("CUBE", cube);
-
     pos.setFromMatrixPosition(cube.matrixWorld);
     //console.log("POS",pos);
 
@@ -293,4 +253,54 @@ RubiksCube.prototype.get_index = function (cube) {
     pos.z = Math.round(pos.z / (this.size));
 
     return pos;
+};
+
+function count(l,v){
+    var cnt = 0;
+    for(i in l){
+        if(l[i] == v){
+            ++cnt;
+        }
+    }
+    return cnt;
+}
+
+RubiksCube.prototype.shuffle = function(n){
+    if(n === undefined)
+        n = 16; //default shuffle num.
+
+    var pivots = [];
+
+    var lim = [-1,0,1];
+    for(xi in lim){
+        var x = lim[xi];
+        for(yi in lim){
+            var y = lim[yi];
+            for(zi in lim){
+                var z = lim[zi];
+                if(count([x,y,z],0) == 2){
+                    pivots.push(new THREE.Vector3(x,y,z));
+                }
+            }
+        }
+    }
+
+    // lock - rotate - snap - release - reindex
+
+    for(var i=0; i<n; ++i){
+
+        var idx = Math.floor(Math.random() * pivots.length);
+
+        var pivot = pivots[idx];
+
+        var axis = 'xyz'[argmax(Math.abs(pivot.x),Math.abs(pivot.y),Math.abs(pivot.z)).idx];
+
+        this.lock(pivot,axis,1);
+
+        this.pivot.rotation[this.pivotAxis] += Math.PI / 2;
+
+        this.release();
+
+        this.reIndex();
+    }
 };

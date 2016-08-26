@@ -46,6 +46,7 @@
             x : new THREE.Vector3(1, 0, 0),
             y : new THREE.Vector3(0, 1, 0),
             z : new THREE.Vector3(0, 0, 1),
+            display : null
         };
 
 
@@ -94,20 +95,11 @@
             scene.add(rubiksCube);
         }
 
-        function addAxes(scene) {
-            var axes = buildAxes(origin, 100);
-            scene.add(axes);
-        }
         function addCamera(scene) {
 
         }
 
         function setCamera(){
-
-            console.log({
-                theta : theta,
-                phi : phi
-            });
 
             camera.position.x = radius * Math.sin(theta)
                     * Math.cos(phi);
@@ -137,7 +129,10 @@
 
             addLight(scene);
             addCube(scene);
-            addAxes(scene);
+
+            world_axes.display = buildAxes(origin, 100);
+
+            scene.add(world_axes.display);
 
             raycaster = new THREE.Raycaster();
 
@@ -191,8 +186,7 @@
             egh.material.linewidth = 2;
             controller.scene.add(egh);
 
-            // add axes
-            addAxes(controller.scene);
+            controller.scene.add(buildAxes(origin,100));
 
             controller.renderer = new THREE.WebGLRenderer();
             controller.renderer.setClearColor(0xe0e0e0);
@@ -230,8 +224,38 @@
 
             });
 
-            setCamera();
 
+
+            //shuffle
+
+            $("#shuffle").click(function(){
+                var n = $("#shuffle_n").val();
+                rubiksCube.shuffle(n);
+            });
+
+            //reset
+            $("#reset").click(function(){
+
+                scene.remove(rubiksCube);
+
+                rubiksCube = new RubiksCube(20);
+
+                scene.add(rubiksCube);
+            });
+
+            $("#axis").click(function(){
+                if(this.checked){
+                    world_axes.display = buildAxes(origin, 100);
+                    scene.add(world_axes.display);
+                }else{
+                    if(world_axes.display){
+                        scene.remove(world_axes.display);
+                        world_axes.display = null;
+                    }
+                }
+            });
+
+            setCamera();
         }
 
         function onWindowResize() {
@@ -433,11 +457,18 @@
 </div>
 
 <div id="controller">
-    Controller
-    <div id="controller_container">
+    <span>Controller</span>
+    <div id="controller_container"></div>
+    <span>Click on face to set view angle.</span><br/>
 
-    </div>
-    Click on face to change view.
+    <button type="button" id="shuffle" style="margin-top:10px">Shuffle</button>
+
+    <input type="number" id="shuffle_n" min="1" max="32" value="8"/><br/>
+
+    <button type="button" id="reset" style="margin-top: 10px">Reset</button><br/>
+
+    <input type="checkbox" id="axis" checked/> Axis
+
 </div>
 
 </body>
