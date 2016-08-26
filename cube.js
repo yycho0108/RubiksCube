@@ -12,14 +12,27 @@ function cubeMaterial(x, y, z) {
 
     for(var i in images){
         var image = images[i];
-        materials[i] = (
-            new THREE.MeshBasicMaterial({
+
+        if ((i == 0 && x == 1) ||
+            (i == 1 && x == -1) ||
+            (i == 2 && y == 1) ||
+            (i == 3 && y == -1) ||
+            (i == 4 && z == 1) ||
+            (i == 5 && z == -1)
+        ){
+			//outward-facing
+			materials[i] = new THREE.MeshBasicMaterial({
                 map : loader.load('images/cube/' + image + '.png'),
                 //specular: 0xffffff,
                 //emissive: 0x000000,
                 //shininess: 30,
                 //overdraw: true
-            }));
+            });
+		}else{
+			materials[i] = new THREE.MeshBasicMaterial({
+				color : 0x000000
+			});
+		}
     }
 
 
