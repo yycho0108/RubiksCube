@@ -2,18 +2,18 @@
  * Created by jamiecho on 8/24/16.
  */
 
-
 function cubeMaterial(x, y, z) {
     var colors = [0xff0000, 0x00ff00, 0x0000ff, 0x00ffff, 0xff00ff, 0xffff00];
     var materials = new Array(6);
 
     var images = ['right','left','up','down','front','back'];
+    var loader = new THREE.TextureLoader();
 
     for(var i in images){
         var image = images[i];
         materials[i] = (
             new THREE.MeshBasicMaterial({
-                map : THREE.ImageUtils.loadTexture('images/cube/' + image + '.png'),
+                map : loader.load('images/cube/' + image + '.png'),
                 //specular: 0xffffff,
                 //emissive: 0x000000,
                 //shininess: 30,
@@ -53,7 +53,8 @@ function cubeMaterial(x, y, z) {
 /* RubiksCube */
 function RubiksCube(size) {
     this.size = size;
-    this.cube = new THREE.Group();
+    THREE.Object3D.call(this);
+    //this.cube = new THREE.Group();
     this.cubes = new Array(3);
 
 
@@ -72,7 +73,6 @@ function RubiksCube(size) {
                 var material = cubeMaterial(x, y, z);
                 var geometry = new THREE.BoxGeometry(size, size, size);
 
-
                 var cube_one = new THREE.Mesh(geometry, material);
                 cube_one.position.x = x * size; // * 1.25;
                 cube_one.position.y = y * size; // * 1.25;
@@ -83,8 +83,8 @@ function RubiksCube(size) {
 
                 cube_one.name = 'cube(' + x + ',' + y + ',' + z + ')';
 
-                scene.add(cube_one);
-                scene.add(cube_one.edgesHelper);
+                this.add(cube_one);
+                this.add(cube_one.edgesHelper);
 
                 this.cubes[x + 1][y + 1][z + 1] = cube_one;
                 //save reference
@@ -92,6 +92,10 @@ function RubiksCube(size) {
         }
     }
 }
+
+RubiksCube.prototype = Object.create(THREE.Object3D.prototype);
+RubiksCube.prototype.constructor = RubiksCube;
+
 RubiksCube.prototype.lock = function (sel, axis, dir) {
     this.pivotAxis = axis;
     this.pivotDir = dir;
@@ -183,10 +187,12 @@ RubiksCube.prototype.release = function () {
     var pivot = this.pivot;
 
     if (pivot) {
+
         for (i in this.active) {
             var cube = this.active[i];
-            cube.updateMatrixWorld();
-            THREE.SceneUtils.detach(cube, pivot, scene);
+            //cube.updateMatrixWorld();
+            this.updateMatrixWorld();
+            THREE.SceneUtils.detach(cube, pivot, this); //back onto the cube!
         }
 
         //traverse did not work -- threw undefined

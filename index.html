@@ -25,7 +25,7 @@
     </style>
     <script src="https://code.jquery.com/jquery-2.2.4.js" integrity="sha256-iT6Q9iMJYuQiMWNd9lDyBUStIq/8PuOW33aOqmvFpqI="
             crossorigin="anonymous"></script>
-    <script src="three.min.js"></script>
+    <script src="three.js"></script>
     <script src="utils.js"></script>
     <script src="axis.js"></script>
     <script src="cube.js"></script>
@@ -91,7 +91,7 @@
         function addCube(scene) {
             var size = 20;
             rubiksCube = new RubiksCube(size);
-            scene.add(rubiksCube.cube);
+            scene.add(rubiksCube);
         }
 
         function addAxes(scene) {
@@ -168,12 +168,13 @@
 
             var materials = [];
             var images = ['right','left','up','down','front','back'];
+            var loader = new THREE.TextureLoader();
 
             for(var i in images){
                 var image = images[i];
                 materials.push(
                         new THREE.MeshBasicMaterial({
-                            map : THREE.ImageUtils.loadTexture('images/view_cube/' + image + '.png')
+                            map : loader.load('images/view_cube/' + image + '.png')
                         }));
             }
 
@@ -218,7 +219,7 @@
 
                     var n = intersects[0].face.normal;
 
-                    console.log(n);
+                    //console.log(n);
 
                     theta = Math.atan2(n.x, n.z); // should be 3.14,0 at facing x axis
 
@@ -277,8 +278,8 @@
                 rotateCube = true;
                 if (rotateCube) {
                     //find the selected sub-cube
-                    var intersects = raycaster.intersectObjects(scene.children);
-                    console.log(scene.children.length);
+                    var intersects = raycaster.intersectObjects(rubiksCube.children);
+                    //console.log(scene.children.length);
 
                     if (intersects.length > 0) {
 
@@ -288,11 +289,7 @@
                         temp_axes = buildAxes(orig, 10);
                         scene.add(temp_axes);
 
-                        console.log(intersects[0].point);
-
-                        console.log(intersects[0].face);
-                        //orig = new THREE.Vector3(mouse.x, mouse.y, 0.0).unproject(camera); //--> real coordinates
-                        console.log(orig);
+                        //console.log(orig);
 
                         /*
                          var geometry = new THREE.SphereGeometry( 1, 32, 32 );
@@ -386,6 +383,7 @@
                             var dir = probs[axis] >= 0 ? 1 : -1;
 
                             console.log('AXIS : ', axis);
+
                             rubiksCube.lock(sel, axis, dir);
                         }
                         break;
